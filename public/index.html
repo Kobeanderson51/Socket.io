@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.io Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+
+<body class="bg-gray-100 font-sans h-screen flex flex-col justify-between">
+
+    <!-- Main Container -->
+    <div class="container mx-auto p-6 max-w-2xl flex-grow flex flex-col justify-between">
+
+        <!-- Username Input Section -->
+        <div id="userName" class="mb-4">
+            <h1 class="text-2xl font-semibold mb-2 text-gray-700">Welcome to Chat!</h1>
+            <div class="flex gap-2">
+                <input type="text" id="nameInput" placeholder="Enter your name"
+                    class="p-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="setUsername()"
+                    class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition">
+                    Set Username
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages List -->
+        <div class="flex-grow overflow-y-auto mb-4 bg-white p-4 rounded-lg shadow-md">
+            <ul id="messages" class="space-y-2 text-gray-800">
+            </ul>
+        </div>
+
+        <!-- Chat Messages Input -->
+        <form id="form" class="flex bg-white shadow-lg p-4 rounded-lg fixed bottom-0 left-0 right-0 max-w-2xl mx-auto">
+            <input id="input" autocomplete="off" class="flex-grow p-3 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Type a message... Type /help for commands">
+            <button type="submit"
+                class="bg-blue-500 text-white px-4 py-3 rounded-r-lg hover:bg-blue-600 transition">Send</button>
+        </form>
+
+    </div>
+
+    <script>
+        const socket = io();
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const messages = document.getElementById('messages');
+        let userName = '';
+
+        function setUsername() {
+            const nameInput = document.getElementById('nameInput');
+            userName = nameInput.value;
+            nameInput.disabled = true;
+            document.querySelector("#userName").classList.add('hidden');
+            socket.emit('set_username', userName); // Notify server of the username
+        }
+
+        // Handle form submission and send message
+// Handle form submission and send message
+form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const messageText = input.value.trim();
+
+    if (!messageText || !userName) return; // Prevent sending empty messages or if username isn't set
+
+    if (messageText.startsWith('/changename ')) {
+        const newName = messageText.split(' ')[1];
+        if (newName) {
+            userName = newName; // Change the username
+            socket.emit('set_username', newName); // Update username on the server
+            const item = document.createElement('li');
+            item.textContent = `You changed your name to: ${newName}`;
+            messages.appendChild(item); // Notify the user locally
+        }
+    } else if (messageText.startsWith('/kick ')) {
+        const parts = messageText.split(' ');
+        const userToKick = parts[1];
+        const password = parts[2];
+        if (userToKick && password) {
+            socket.emit('kick_user', { userToKick, password }); // Send the kick command to the server
+            const item = document.createElement('li');
+            item.textContent = `Requested to kick ${userToKick}.`;
+            messages.appendChild(item); // Notify the user locally
+        }
+    } else if (messageText.startsWith('/dm ')) {
+        const parts = messageText.split(' ');
+        const userToDM = parts[1];
+        const dmMessage = parts.slice(2).join(' ');
+        if (userToDM && dmMessage) {
+            socket.emit('direct_message', { userToDM, dmMessage }); // Send the DM command to the server
+            const item = document.createElement('li');
+            item.textContent = `Sent a direct message to ${userToDM}: ${dmMessage}`;
+            messages.appendChild(item); // Notify the user locally
+        }
+    } else if (messageText.startsWith('/help')) {
+        const helpMessages = [
+            '/changename [new name] - Change your username',
+            '/kick [username] [password] - Kick a user',
+            '/dm [username] [message] - Send a direct message to a user',
+            'Type normally to send a message to everyone'
+        ];
+        helpMessages.forEach(helpMessage => {
+            const item = document.createElement('li');
+            item.textContent = helpMessage;
+            messages.appendChild(item);
+        });
+    } else {
+        // Regular message sending
+        const message = `${userName}: ${messageText}`;
+        socket.emit('client message', message); // Send the message to the server
+        const item = document.createElement('li');
+        item.textContent = message;
+        messages.appendChild(item); // Add the message locally to #messages list
+    }
+
+    input.value = ''; // Clear the input
+});
+
+        // Receive broadcasted messages from the server
+        socket.on('server_message', (msg) => {
+            const item = document.createElement('li');
+            item.textContent = msg;
+            messages.appendChild(item); // Display the server message in the #messages list
+
+            // Check if the message is about being kicked
+            if (msg === 'You have been kicked from the chat.') {
+                alert(msg); // Alert the user that they have been kicked
+                // Optionally, you could redirect the user or perform other actions here
+            }
+        });
+
+        // Receive direct messages
+        socket.on('direct_message', ({ from, message }) => {
+            const item = document.createElement('li');
+            item.textContent = `Direct message from ${from}: ${message}`;
+            messages.appendChild(item); // Display the direct message in the #messages list
+        });
+    </script>
+
+</body>
+
+</html>
